@@ -1,8 +1,9 @@
 import "./styles.css"
 
 export const metadata = {
-  title: "Geo IP Location",
-  description: "Shows location data provided by Vercel geolocation headers.",
+  title: "Location Detection Approaches",
+  description:
+    "Compares Vercel IP geolocation with browser geolocation and reverse geocoding.",
 }
 
 export default function RootLayout({ children }) {
