@@ -41,6 +41,14 @@ export default function Home() {
     }
   }, [])
 
+  function getRegionCode(code, fallback) {
+    if (!code) {
+      return fallback
+    }
+
+    return code.includes("-") ? code.split("-").pop() : code
+  }
+
   function checkDeviceLocation() {
     setDeviceError("")
     setDeviceLocation(null)
@@ -53,13 +61,47 @@ export default function Home() {
     setIsCheckingDevice(true)
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setDeviceLocation({
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-          accuracy: Math.round(position.coords.accuracy),
-        })
-        setIsCheckingDevice(false)
+      async (position) => {
+        const latitude = position.coords.latitude
+        const longitude = position.coords.longitude
+
+        try {
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+          )
+
+          if (!response.ok) {
+            throw new Error("Could not reverse-geocode device location.")
+          }
+
+          const geocode = await response.json()
+          const city = geocode.city || geocode.locality
+          const region = getRegionCode(
+            geocode.principalSubdivisionCode,
+            geocode.principalSubdivision,
+          )
+
+          setDeviceLocation({
+            latitude: latitude.toFixed(6),
+            longitude: longitude.toFixed(6),
+            accuracy: Math.round(position.coords.accuracy),
+            city,
+            region,
+            regionName: geocode.principalSubdivision,
+            postalCode: geocode.postcode,
+            country: geocode.countryCode,
+            countryName: geocode.countryName,
+          })
+        } catch (reverseGeocodeError) {
+          setDeviceLocation({
+            latitude: latitude.toFixed(6),
+            longitude: longitude.toFixed(6),
+            accuracy: Math.round(position.coords.accuracy),
+          })
+          setDeviceError(reverseGeocodeError.message)
+        } finally {
+          setIsCheckingDevice(false)
+        }
       },
       (locationError) => {
         setDeviceError(locationError.message)
@@ -81,6 +123,18 @@ export default function Home() {
     ["Latitude", data?.latitude],
     ["Longitude", data?.longitude],
     ["Vercel region", data?.vercelRegion],
+  ]
+
+  const deviceFields = [
+    ["City", deviceLocation?.city],
+    ["Region", deviceLocation?.region],
+    ["Region name", deviceLocation?.regionName],
+    ["Postal code", deviceLocation?.postalCode],
+    ["Country", deviceLocation?.country],
+    ["Country name", deviceLocation?.countryName],
+    ["Latitude", deviceLocation?.latitude],
+    ["Longitude", deviceLocation?.longitude],
+    ["Accuracy", deviceLocation ? `${deviceLocation.accuracy} m` : undefined],
   ]
 
   return (
@@ -124,8 +178,9 @@ export default function Home() {
           <div>
             <h2>Device location</h2>
             <p>
-              Uses your browser permission for more accurate coordinates. City
-              names still need a separate map or reverse-geocoding service.
+              Uses your browser permission, then reverse-geocodes the
+              coordinates with BigDataCloud to resolve city, region, country,
+              and postal code.
             </p>
           </div>
           <button onClick={checkDeviceLocation} disabled={isCheckingDevice}>
@@ -137,18 +192,12 @@ export default function Home() {
 
         {deviceLocation && (
           <dl className="grid">
-            <div className="item">
-              <dt>Device latitude</dt>
-              <dd>{deviceLocation.latitude}</dd>
-            </div>
-            <div className="item">
-              <dt>Device longitude</dt>
-              <dd>{deviceLocation.longitude}</dd>
-            </div>
-            <div className="item">
-              <dt>Accuracy</dt>
-              <dd>{deviceLocation.accuracy} m</dd>
-            </div>
+            {deviceFields.map(([label, value]) => (
+              <div className="item" key={label}>
+                <dt>{label}</dt>
+                <dd>{value || "Not available"}</dd>
+              </div>
+            ))}
           </dl>
         )}
       </section>
