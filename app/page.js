@@ -1,33 +1,51 @@
-import { headers } from "next/headers"
+"use client"
 
-async function getLocation() {
-  const requestHeaders = await headers()
-  const host = requestHeaders.get("host")
-  const protocol = requestHeaders.get("x-forwarded-proto") || "http"
-  const baseUrl = `${protocol}://${host}`
+import { useEffect, useState } from "react"
 
-  const response = await fetch(`${baseUrl}/api/location`, {
-    cache: "no-store",
-  })
+export default function Home() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState("")
 
-  if (!response.ok) {
-    throw new Error("Could not load location data.")
-  }
+  useEffect(() => {
+    let cancelled = false
 
-  return response.json()
-}
+    async function loadLocation() {
+      try {
+        const response = await fetch("/api/location", {
+          cache: "no-store",
+        })
 
-export default async function Home() {
-  const data = await getLocation()
+        if (!response.ok) {
+          throw new Error("Could not load location data.")
+        }
+
+        const location = await response.json()
+
+        if (!cancelled) {
+          setData(location)
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError.message)
+        }
+      }
+    }
+
+    loadLocation()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const fields = [
-    ["IP address", data.ip],
-    ["City", data.city],
-    ["Region", data.region],
-    ["Country", data.country],
-    ["Latitude", data.latitude],
-    ["Longitude", data.longitude],
-    ["Vercel region", data.vercelRegion],
+    ["IP address", data?.ip],
+    ["City", data?.city],
+    ["Region", data?.region],
+    ["Country", data?.country],
+    ["Latitude", data?.latitude],
+    ["Longitude", data?.longitude],
+    ["Vercel region", data?.vercelRegion],
   ]
 
   return (
@@ -36,10 +54,12 @@ export default async function Home() {
         <p className="eyebrow">Vercel geolocation</p>
         <h1>Your request location</h1>
         <p className="lede">
-          This page reads the location data Vercel adds to incoming requests.
+          This page reads the location data Vercel adds to your browser request.
         </p>
 
-        {!data.hasLocation && (
+        {error && <div className="notice">{error}</div>}
+
+        {data && !data.hasLocation && (
           <div className="notice">
             Location headers are not present. Deploy this app to Vercel to see
             real visitor location data.
@@ -50,7 +70,7 @@ export default async function Home() {
           {fields.map(([label, value]) => (
             <div className="item" key={label}>
               <dt>{label}</dt>
-              <dd>{value || "Not available"}</dd>
+              <dd>{data ? value || "Not available" : "Checking..."}</dd>
             </div>
           ))}
         </dl>
